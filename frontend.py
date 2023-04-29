@@ -491,5 +491,3 @@ def main_app():
 
 
 main_app()
-
-main_app()
