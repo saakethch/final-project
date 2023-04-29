@@ -56,7 +56,7 @@ def download_image(image_url, save_folder):
 # Get caption -> caption string
 def get_caption_snowpark(image_path):
     
-    session.file.put("./images/image.jpg", '@dash_models',
+    session.file.put("image.jpg", '@dash_models',
                      overwrite=True, auto_compress=False)
     session.add_packages(["transformers", "Pillow"])
     print("Uploaded Image to Snowflake")
@@ -115,7 +115,7 @@ def get_product_recommendations(nouns, caption):
 
 def generate_recommends(image_url):
     save_folder = 'images'
-    image_path = download_image(image_url, save_folder)
+    image_path = 'image.jpg' #download_image(image_url, save_folder)
     caption = get_caption_snowpark(image_path)
     nouns, caption = extract_nouns(caption)
     product_recommendations = get_product_recommendations(nouns, caption)
@@ -321,8 +321,9 @@ def main_app():
                 img = Image.open(io.BytesIO(img_data)).convert("RGB")
                 converted_img_data = io.BytesIO()
                 img.save(converted_img_data, format="JPEG")
-                file_path = os.path.join("images", 'image.jpg')
-                img.save(file_path)
+                file_path = os.path.join('image.jpg')
+                with open(file_path, "wb") as f:
+                    f.write(converted_img_data.getvalue())
                 print("here")
                 file_name = 'img_' + str(uuid.uuid4()) + ".jpg"
                 print(username)
