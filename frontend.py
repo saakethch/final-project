@@ -17,6 +17,8 @@ import time
 from textblob import TextBlob
 import itertools
 import io
+import nltk
+nltk.download('punkt')
 
 # Environment connections
 connection_parameters = json.load(open('connection.json'))
