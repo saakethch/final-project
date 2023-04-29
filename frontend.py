@@ -61,12 +61,21 @@ def get_caption_snowpark(image_path):
     session.add_packages(["transformers", "Pillow"])
     print("Uploaded Image to Snowflake")
     # Import Model & Image to Snowpark
-    directory = '../model/'
+    directory = ['config.json',
+                 'events.out.tfevents.1633443513.t1v-n-bb5dfd23-w-0.8655.0.v2',
+                 'flax_model.msgpack',
+                 'jaxlib-0.4.7+cuda11.cudnn86-cp39-cp39-manylinux2014_x86_64.whl',
+                 'jaxlib-0.4.7-cp311-cp311-manylinux2014_x86_64.whl',
+                 'preprocessor_config.json',
+                 'pytorch_model.bin',
+                 'special_tokens_map (1).json',
+                 'special_tokens_map.json',
+                 'tokenizer.json',
+                 'tokenizer_config.json',
+                 'vocab.json']
     progress_bar.progress(40)
-    for filename in os.listdir(directory):
-        f = os.path.join(directory, filename)
-        if os.path.isfile(f):
-            session.add_import('@dash_models/'+filename)
+    for filename in directory:
+        session.add_import('@dash_models/'+filename)
     session.add_import('@dash_models/image.jpg')
     print("Imported Image into Snowflake model")
     print("Running model")
