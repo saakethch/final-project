@@ -16,6 +16,7 @@ import openai
 import time
 from textblob import TextBlob
 import itertools
+import io
 
 # Environment connections
 connection_parameters = json.load(open('connection.json'))
@@ -54,6 +55,7 @@ def download_image(image_url, save_folder):
 
 # Get caption -> caption string
 def get_caption_snowpark(image_path):
+    
     session.file.put("./images/image.jpg", '@dash_models',
                      overwrite=True, auto_compress=False)
     session.add_packages(["transformers", "Pillow"])
@@ -315,6 +317,12 @@ def main_app():
             uploaded_file = st.file_uploader(
                 "Choose an image file", accept_multiple_files=False, type=['jpg', 'jpeg', 'png'])
             if uploaded_file is not None and not(st.session_state.get("not_uploaded")):
+                img_data = uploaded_file.read()
+                img = Image.open(io.BytesIO(img_data)).convert("RGB")
+                converted_img_data = io.BytesIO()
+                img.save(converted_img_data, format="JPEG")
+                file_path = os.path.join("images", 'image.jpg')
+                img.save(file_path)
                 print("here")
                 file_name = 'img_' + str(uuid.uuid4()) + ".jpg"
                 print(username)
