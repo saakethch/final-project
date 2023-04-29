@@ -18,6 +18,10 @@ from textblob import TextBlob
 import itertools
 import io
 import nltk
+import pandas as pd
+import numpy as np
+import plotly.express as px
+
 nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
 
@@ -300,13 +304,11 @@ def get_base64(image):
     return encoded
 
 # Main app
-
-
 def main_app():
     st.title('SocialLens')
     st.write('Your story, in pixels')
     page = st.sidebar.radio(
-        'Navigation', ['Sign Up', 'Log In', 'Home'])
+        'Navigation', ['Sign Up', 'Log In', 'Home','Data Analysis'])
 
     if page == 'Sign Up':
         new_username = st.text_input('New Username')
@@ -398,6 +400,96 @@ def main_app():
                             </a>
                             ''',
                              unsafe_allow_html=True)
+    elif page == "Data Analysis":
+        st.title("Possible Data Insights")
+        # st.write("Generated some data for these graphs")
+        np.random.seed(3)
+        ads = ['Pet Ads', 'Fashion Ads', 'Food Ads',
+            'Travel Gear Ads', 'Tech Gadgets Ads']
+        ages = ['18-24', '25-34', '35-44', '45-54', '55+']
+        genders = ['Male', 'Female']
+        locations = ['USA', 'Europe', 'Asia', 'Africa', 'South America', 'Australia']
+        categories = ['Pet', 'Tech', 'Food', 'Travel', 'Fashion']
+        months = pd.date_range('2022-01-01', periods=12, freq='M')
+        clicks = np.random.randint(1, 100, size=(len(months), len(ads)))
+        age_labels = np.random.choice(ages, size=len(months))
+        gender_labels = np.random.choice(genders, size=len(months))
+        location_labels = np.random.choice(locations, size=len(months))
+        category_labels = np.random.choice(categories, size=len(months))
+        month_labels = months.strftime('%Y-%m')
 
+        df = pd.DataFrame(clicks, columns=ads)
+        df['Age'] = age_labels
+        df['Gender'] = gender_labels
+        df['Location'] = location_labels
+        df['Category'] = category_labels
+        df['Month'] = month_labels
+
+        st.header("Gender Analysis on single Ad Category")
+        st.plotly_chart(px.box(df, x='Location', y='Pet Ads',
+                        color='Gender'), use_container_width=True)
+
+        heatmap_df = pd.DataFrame({
+            'Hour': np.random.randint(7, 24, size=1000),
+            'Clicks': np.random.randint(1, 100, size=1000),
+            'Location': np.random.choice(locations, size=1000),
+            'Age': np.random.choice(ages, size=1000),
+            'Gender': np.random.choice(genders, size=1000),
+            'Category': np.random.choice(categories, size=1000)
+        })
+
+        st.header("Clicks Analysis based on Gender & Location")
+        bubble_df = pd.DataFrame({
+            'Hour': np.random.randint(7, 24, size=100),
+            'Clicks': np.random.randint(1, 100, size=100),
+            'Location': np.random.choice(locations, size=100),
+            'Age': np.random.choice(ages, size=100),
+            'Gender': np.random.choice(genders, size=100),
+            'Category': np.random.choice(categories, size=100)
+        })
+        bubble_chart = px.scatter(bubble_df, x='Location', y='Hour',
+                                size='Clicks', color='Category', hover_data=['Gender'])
+        st.plotly_chart(bubble_chart, use_container_width=True)
+
+        st.header("Clicks Analysis based on Ad Category & Time of Day")
+        scatter_df = pd.DataFrame({
+            'Clicks': np.random.randint(1, 100, size=100),
+            'Time': np.random.randint(8, 24, size=100),
+            'Age': np.random.randint(18, 65, size=100),
+            'Ad_Category': np.random.choice(['gadgets', 'pet', 'food'], size=100)
+        })
+
+        fig = px.scatter(scatter_df, x='Time', y='Clicks', color='Ad_Category',
+                        size='Age', hover_data=['Ad_Category', 'Age'])
+        st.plotly_chart(fig)
+
+       
+        # Stacked Bar Chart
+        st.header("Clicks Analysis with Category Competetion")
+        stacked_bar_df = pd.DataFrame({
+            'Clicks': np.random.randint(1, 100, size=100),
+            'Age': np.random.randint(18, 65, size=100),
+            'Gender': np.random.choice(['M', 'F'], size=100),
+            'Ad_Category': np.random.choice(['gadgets', 'pet', 'food'], size=100)
+        })
+
+        stacked_bar_df = stacked_bar_df.groupby(['Age', 'Gender', 'Ad_Category'])['Clicks'].sum().reset_index()
+        fig = px.bar(stacked_bar_df, 
+                    x='Age', 
+                    y='Clicks', 
+                    color='Ad_Category', 
+                    barmode='stack',
+                    facet_row='Gender')
+        st.plotly_chart(fig)
+
+        st.header("Total Ad Category Weightage")
+        data = {'Ad_Category': ads,
+                'Weightage': [7, 43, 25, 10, 15]}
+        df = pd.DataFrame(data)
+        fig = px.pie(df, values='Weightage', names='Ad_Category')
+        st.plotly_chart(fig)
+
+
+main_app()
 
 main_app()
