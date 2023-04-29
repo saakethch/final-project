@@ -233,7 +233,7 @@ def load_posts():
     for post in res.json():
         posts.append(post)
     try:
-        sorted_list = sorted(posts, key=lambda x: x["uploadedAt"])
+        sorted_list = sorted(posts, key=lambda x: x["uploadedAt"],reverse=True)
         st.session_state['posts'] = sorted_list
         print("Sorting")
         return sorted_list
@@ -306,7 +306,7 @@ def main_app():
     st.title('SocialLens')
     st.write('Your story, in pixels')
     page = st.sidebar.radio(
-        'Navigation', ['Sign Up', 'Log In', 'Home', 'Data Analysis'])
+        'Navigation', ['Sign Up', 'Log In', 'Home'])
 
     if page == 'Sign Up':
         new_username = st.text_input('New Username')
