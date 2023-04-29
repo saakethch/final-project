@@ -9,3 +9,5 @@ transformers==4.28.1
 snowflake-connector-python==3.0.2
 snowflake-snowpark-python==1.2.0
 textblob==0.17.1
+pandas==1.5.1
+plotly==5.13.0
