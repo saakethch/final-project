@@ -10,7 +10,7 @@ from snowflake.snowpark.session import Session
 # Function to download and save image locally
 def download_image(image_url, save_folder):
     response = requests.get(image_url)
-    image = Image.open(BytesIO(response.content))
+    image = Image.open(BytesIO(response.content)).convert('RGB')
     # os.mkdir(save_folder)
     file_path = os.path.join(save_folder, 'image.jpg')
     image.save(file_path)
@@ -54,8 +54,8 @@ def extract_nouns(caption):
           stop=None
         )
         caption = response['choices'][0]['text']
-        print("Extracted Nouns - "+ nouns)
         extracted_nouns = caption.strip().split(',')
+        print("Extracted Nouns - "+ extracted_nouns)
     except Exception as e:
         print(f"Error extracting nouns: {e}")
     return extracted_nouns,caption
@@ -96,10 +96,49 @@ def generate_recommends(image_url):
     os.remove(image_path)
     return product_recommendations
 
+# Amazon Scrapping 
+def find_product_by_search_keyword(search_term):
+    params = {
+      'api_key': 'ACE9F15B121149CBA47FA8E80B3C2AB8', # replace with your api key
+      'type': 'search',
+      'amazon_domain': 'amazon.com',
+      'search_term': search_term,
+      'sort_by': 'price_low_to_high'
+    }
+
+    # make the http GET request to Rainforest API
+    api_result = requests.get('https://api.rainforestapi.com/request', params)
+
+    # print the JSON response from Rainforest API
+    return json.dumps(api_result.json())
+
+def product_links(products):
+    # result array
+    output_links = []
+
+    # loop over products 
+    for product in products:
+        results = find_product_by_search_keyword(product)
+        res_json = json.loads(results)
+        expected_output = res_json["search_results"][:5]
+        emp_li = []
+        for li in expected_output:
+            emp_li.append(li['link'])
+        res = {}
+        res[product] = emp_li
+        output_links.append(res)
+
+    return output_links
+
 # Example usage
-api_key = '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'
-openai.api_key = api_key
-# image_url = 'https://plus.unsplash.com/premium_photo-1676158159495-6b8448629412?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=774&q=80'
-image_url = 'https://plus.unsplash.com/premium_photo-1682175064711-2e2870132d9c?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1740&q=80'
-product_recommendations = generate_recommends(image_url)
-print(product_recommendations)
+def generate_ad_links_for_url(image_url):
+    api_key = #openaikey
+    openai.api_key = api_key
+    # image_url = 'https://plus.unsplash.com/premium_photo-1676158159495-6b8448629412?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=774&q=80'
+    image_url = image_url
+    product_recommendations = generate_recommends(image_url)
+    print(product_recommendations)
+    ad_links = product_links(product_recommendations)
+    print(ad_links)
+
+generate_ad_links_for_url('https://admmedia.s3.ap-south-1.amazonaws.com/user_uploads/img_0390164a-4946-469e-ae1a-b4cbff3e8dbb')

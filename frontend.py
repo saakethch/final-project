@@ -1,5 +1,7 @@
+
 # Imports
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 from bs4 import BeautifulSoup
 from snowflake.snowpark.session import Session
@@ -13,12 +15,32 @@ from PIL import Image
 import openai
 import time
 from textblob import TextBlob
+import itertools
 
-# Function to download and save image locally
+# Environment connections
 connection_parameters = json.load(open('connection.json'))
 session = Session.builder.configs(connection_parameters).create()
-api_key = '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'
+api_key = st.secrets["OPEN_AI_API"]
 openai.api_key = api_key
+amzn_api_key = "5EB311E772024A59BB861F16A6DC7B67"
+api_url = 'https://4t6zjqbvra77cljo42ody4xtmi0smplq.lambda-url.us-east-1.on.aws/'
+
+# Local variables
+progress_bar = st.progress(0)
+interests = []
+posts = []
+ad_links = []
+user_exists = False
+usern = ""
+likes = []
+st.session_state['start_idx'] = 0
+st.session_state['end_idx'] = 5
+st.session_state['ads'] = []
+# Download image function
+
+if 'not_uploaded' not in st.session_state:
+    st.session_state.not_uploaded = False
+
 
 
 def download_image(image_url, save_folder):
@@ -27,74 +49,68 @@ def download_image(image_url, save_folder):
     # os.mkdir(save_folder)
     file_path = os.path.join(save_folder, 'image.jpg')
     image.save(file_path)
-    print("Image Downloaded")
+    print("Image Downloaded to local")
     return file_path
 
-# Function to call API and get caption
-
-
+# Get caption -> caption string
 def get_caption_snowpark(image_path):
-    # Connect Snowpark
-
-    # Upload file to Snowpark
     session.file.put("./images/image.jpg", '@dash_models',
                      overwrite=True, auto_compress=False)
     session.add_packages(["transformers", "Pillow"])
-    print("Uploaded Image")
+    print("Uploaded Image to Snowflake")
     # Import Model & Image to Snowpark
     directory = '../model/'
+    progress_bar.progress(40)
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
         if os.path.isfile(f):
             session.add_import('@dash_models/'+filename)
     session.add_import('@dash_models/image.jpg')
-    print("Imported Image")
+    print("Imported Image into Snowflake model")
+    print("Running model")
     # Call Model with UDF
+    progress_bar.progress(50)
     predicted_label = session.sql(
         '''SELECT image_caption_generator()''').collect()
     generated_caption = predicted_label[0][0]
-    print("Generated Captions - ", generated_caption)
+    print("Generated Caption - ", generated_caption)
+    progress_bar.progress(70)
     return generated_caption
 
-# Function to extract nouns from caption
+# Nouns extract -> nouns list
 
 
 def extract_nouns(caption):
     text = caption
     blob = TextBlob(text)
     nouns = [w for (w, pos) in blob.pos_tags if pos[0] == 'N']
-    print(nouns, caption)
+    print("Extracted nouns", nouns)
     return nouns, caption
 
-# Function to get product recommendations based on nouns
+# Product recommendations extract -> recommends list
 
 
 def get_product_recommendations(nouns, caption):
-    # Call API to get product recommendations based on nouns
-    # Replace <API_KEY> with your actual API key
     concatinated_noun_str = {'nouns': ','.join(nouns)}
-    emotion_recognition = "it is very important for you to understand the emotion of this line: " + caption
-
+    emotion_recognition = caption
     prompt_instructions = f"Now Give some potential market product recommendations for the following items or the emotion you recognized: '{concatinated_noun_str}'"
     result_instructions = ", Result Intructions : give a single string seperated by commas, type nothing else."
     product_recommendations = []
-    try:
-        response = openai.Completion.create(
-            prompt=emotion_recognition + prompt_instructions + result_instructions,
-            engine="text-davinci-003",
-            max_tokens=1024,
-            n=1,
-            stop=None
-        )
-        product_recommendations = response['choices'][0]['text']
-        print("Generated Recommends - " + product_recommendations)
-        product_recommendations = product_recommendations.strip().split(',')
-    except Exception as e:
-        print(f"Error extracting nouns: {e}")
+    response = openai.Completion.create(
+        prompt=emotion_recognition + prompt_instructions + result_instructions,
+        engine="text-davinci-003",
+        max_tokens=1024,
+        n=1,
+        stop=None
+    )
+    product_recommendations = response['choices'][0]['text']
+    product_recommendations = product_recommendations.strip().split(',')
+    print("Generated Recommends - ", product_recommendations)
     return product_recommendations
 
+# Function connector -> nouns list , caption string , product_recommendations list
 
-# Main function to download image, get caption, extract nouns, and get product recommendations
+
 def generate_recommends(image_url):
     save_folder = 'images'
     image_path = download_image(image_url, save_folder)
@@ -104,81 +120,79 @@ def generate_recommends(image_url):
     os.remove(image_path)
     return nouns, caption, product_recommendations
 
-# Amazon Scrapping
 
+# Function to extract Product Title
+# Ad generate -> ads list on product recommends
+
+# set up the request parameters
+
+# Amazon Scrapping
 
 def find_product_by_search_keyword(search_term):
     params = {
-        'api_key': 'ACE9F15B121149CBA47FA8E80B3C2AB8',  # replace with your api key
+        'api_key': amzn_api_key,
         'type': 'search',
         'amazon_domain': 'amazon.com',
         'search_term': search_term,
-        'sort_by': 'price_low_to_high'
+        'sort_by': 'price_low_to_high',
+        'page': 1
     }
-
-    # make the http GET request to Rainforest API
     api_result = requests.get('https://api.rainforestapi.com/request', params)
-
-    # print the JSON response from Rainforest API
     return json.dumps(api_result.json())
+
+# Ad generate -> ads list on product recommends
 
 
 def get_product_ads(products):
-    # result array
     output_ads = []
-
-    # loop over products
+    ctr = 0
+    ix = 0
+    # Loop over product recommends
     for product in products:
+        if(ix>3):
+            break
+        ix+=1
         results = find_product_by_search_keyword(product)
         res_json = json.loads(results)
-        expected_output = res_json["search_results"][:5]
+        expected_output = res_json["search_results"][:1]
         emp_li = []
+        ctr+=5
+        progress_bar.progress(70+ctr)
+        print("Products links for ", product)
+        
         for li in expected_output:
-            try: 
-                emp_li.append({"title": li['title'], "price": li['prices']['raw'],
-                            "product_image": li['image'], "product_link": li['link']})
+            try:
+                output_ads.append({"title": li['title'], "price": li['price']['raw'],
+                                   "product_image": li['image'], "link": li['link']})
             except:
-                continue
-        res = {}
-        res[product] = emp_li
-        output_ads.append(res)
-
+                pass
+    print("Ads generated", output_ads)
     return output_ads
 
 
+# Function connector -> nouns list , caption string , ads list based on s3 image_url
+
+
 def generate_product_ads_for_url(image_url):
-    image_url = image_url
+    print("Initiated request")
     nouns, caption, product_recommendations = generate_recommends(image_url)
-    print(product_recommendations)
     output_ads = get_product_ads(product_recommendations)
-    
-    return nouns, caption, output_ads
+    progress_bar.progress(100)
+    return nouns, caption, product_recommendations, output_ads
 
-# def load_ads_based_on_interests():
-#     return ads
-
-
-# Interests
-interests = []
-
-# Posts
-posts = []
-# Ads
-ad_links = []
-user_exists = False
-url = 'https://4t6zjqbvra77cljo42ody4xtmi0smplq.lambda-url.us-east-1.on.aws/'
-usern = ""
-likes = []
+# Get User
 
 
 def get_user(username):
     data = {'method': 'LOGIN_USER', 'userpk': 'user#'+username}
-    res = requests.post(url, json=data)
+    res = requests.post(api_url, json=data)
     if res.status_code == 200:
         interests.append(res.json()['interests'])
         return True
     else:
         return False
+
+# Register User
 
 
 def register_user(username):
@@ -187,51 +201,67 @@ def register_user(username):
         return False
     else:
         data = {'method': 'REGISTER_USER', 'userpk': 'user#'+username}
-        res = requests.post(url, json=data)
+        res = requests.post(api_url, json=data)
         if res.status_code == 200:
             st.success('User Added')
             return True
 
-# Function to get posts with infinite scroll functionality
+# Get Posts paginated
 def get_posts(start_idx, end_idx):
     posts = st.session_state.get('posts')
     return posts[start_idx:end_idx]
 
-
+# List Posts
 def load_posts():
     data = {'method': 'LIST_POSTS'}
-    res = requests.post(url, json=data)
+    res = requests.post(api_url, json=data)
     posts = []
     for post in res.json():
         posts.append(post)
     st.session_state['posts'] = posts
     return posts
-    
-def load_likes():
-    data = {'method': 'LIST_LIKES'}
-    res = requests.post(url, json=data)
-    posts = []
-    for post in res.json():
-        posts.append(post)
-    return posts
+
+# Update Posts
+
+
+def update_post(caption, pr, ads, postsk):
+    data = {
+        "method": "POST_RECOGNITION",
+        "postsk": postsk,
+        "caption": caption,
+        "ad_links": ads,
+        "recommends": pr
+    }
+    res = requests.post(api_url, json=data)
+    print("Updated Post")
+
+# Append to ads
+
+
+def gen_ads_on_likes(post):
+    print(post['ad_links']['N'])
+    st.session_state['ads'] = post['ad_links']['N']
+    print("Updated ads")
+
+# Upload Image
 
 
 def upload_file(image, filename, username):
     data = {'method': 'UPLOAD_POST', 'image': image, 'image_filename': filename,
             'postsk': filename, 'recognitions': [], 'username': username}
-    res = requests.post(url, json=data)
+    res = requests.post(api_url, json=data)
     st.success("Image Uploaded")
+    progress_bar.progress(20)
     post_item = res.json()
-    recognitions, caption, ads = generate_product_ads_for_url(
+    recognitions, caption, pr, ads = generate_product_ads_for_url(
         post_item['image_link'])
-    # data = {'method': 'POST_ADS', 'links': ads, 'recognitions': recognitions,
-    #         'caption': caption, 'postsk':post_item['sk']}
-    # res = requests.post(url, json=data)
-    print("Image recognitions and recommendations", recognitions, caption, ads)
-    load_posts()
+    print("Image recognitions and recommendations", recognitions, caption)
     st.session_state['ads'] = ads
+    update_post(caption, pr, ads, filename)
+    load_posts()
     print("Loaded posts")
-    
+
+# Convert base64
 
 
 def get_base64(image):
@@ -248,18 +278,14 @@ def get_base64(image):
     encoded = base64.b64encode(contents).decode('utf-8')
     return encoded
 
-
-# def generate_ads_for_image(post):
-
-#     # Streamlit app
+# Main app
 
 
 def main_app():
     st.title('SocialLens')
     st.write('Your story, in pixels')
-    page = st.sidebar.radio('Navigation', ['Sign Up', 'Log In', 'Home'])
-    st.session_state['start_idx'] = 0
-    st.session_state['end_idx'] = 3
+    page = st.sidebar.radio(
+        'Navigation', ['Sign Up', 'Log In', 'Home', 'Data Analysis'])
 
     if page == 'Sign Up':
         new_username = st.text_input('New Username')
@@ -279,44 +305,38 @@ def main_app():
                 st.error('Invalid username')
 
     elif page == 'Home':
+        start_idx = st.session_state.get('start_idx')
+        end_idx = st.session_state.get('end_idx')
         username = st.session_state.get('username')
         if st.session_state.get('user_exists'):
             st.success(f'Welcome, {username}!')
-            st.write('Here are your liked posts:')
-
-            liked_posts = []  # load_likes()
-
-            for post in liked_posts:
-                st.image(post['image_link'], use_column_width=True)
-                st.write(f'By: @{post["username"]}')
-
+            
+            # if st.button("Make a Post"):
             uploaded_file = st.file_uploader(
-            "Choose an image file", accept_multiple_files=False)
-            if uploaded_file is not None:
-                file_name = 'img_' + str(uuid.uuid4()) + ".png"
+                "Choose an image file", accept_multiple_files=False, type=['jpg', 'jpeg', 'png'])
+            if uploaded_file is not None and not(st.session_state.get("not_uploaded")):
+                print("here")
+                file_name = 'img_' + str(uuid.uuid4()) + ".jpg"
                 print(username)
                 upload_file(get_base64(
                     uploaded_file), file_name, username)
-                load_posts()
-                posts_to_display = get_posts(start_idx, end_idx)
+                st.progress(0)
+                st.session_state.not_uploaded = True
 
         st.write('Here are some recent posts:')
         load_posts()
 
-        start_idx = st.session_state.get('start_idx', 0)
-        end_idx = st.session_state.get('end_idx', 3)
-
         posts_to_display = get_posts(start_idx, end_idx)
-        
 
         for post in posts_to_display:
             st.image(post['image_link'], use_column_width=True)
             st.write(f'Posted by @{post["username"]}')
             # st.write(f'Likes: {post["likes"]}')
 
-            if st.button(f'<3', key=post['sk']):
+            if st.button(f'❤️', key=post['sk']):
                 if st.session_state.get('user_exists'):
                     likes.append(post)
+                    gen_ads_on_likes(post)
                     # st.session_state['ads'].append(post.ads)
                     st.success('Post liked!')
                 else:
@@ -333,14 +353,23 @@ def main_app():
         # Implement ads row after scrolling past a certain number of posts
         if end_idx >= 2:
             st.write('Here are some ads:')
-            ads = st.session_state.get('ads')
+            ads = st.session_state.ads
             for ad in ads:
-                col1, col2 = st.beta_columns([1, 3])
+                col1, col2 = st.columns([1, 3])
                 with col1:
                     st.image(ad['product_image'], use_column_width=True)
                 with col2:
                     st.write(f'Title: {ad["title"]}')
                     st.write(f'Price: {ad["price"]}')
+                    ad_link = ad["link"]
+                    st.write(f'''
+                            <a target="_self" href={ad_link} target="_blank" rel="noopener noreferrer">
+                                <button>
+                                    Go To Amazon
+                                </button>
+                            </a>
+                            ''',
+                             unsafe_allow_html=True)
 
 
 main_app()
