@@ -38,7 +38,7 @@ user_exists = False
 usern = ""
 likes = []
 st.session_state['start_idx'] = 0
-st.session_state['end_idx'] = 5
+st.session_state['end_idx'] = 10
 st.session_state['ads'] = []
 # Download image function
 
@@ -232,7 +232,14 @@ def load_posts():
     posts = []
     for post in res.json():
         posts.append(post)
-    st.session_state['posts'] = posts
+    try:
+        sorted_list = sorted(posts, key=lambda x: x["uploadedAt"])
+        st.session_state['posts'] = sorted_list
+        print("Sorting")
+        return sorted_list
+    except:
+        st.session_state['posts'] = posts
+        return posts
     return posts
 
 # Update Posts
