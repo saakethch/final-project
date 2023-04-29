@@ -19,6 +19,7 @@ import itertools
 import io
 import nltk
 nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
 
 # Environment connections
 connection_parameters = json.load(open('connection.json'))
